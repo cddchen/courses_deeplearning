@@ -60,9 +60,23 @@ def save_prediction(pred, out_csv='prediciton.csv'):
 
 
 if __name__ == '__main__':
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = AE().to(device)
-    model.load_state_dict(torch.load('auto-encoder-cpu.pth'))
+    model = AE()
+    print('Setting cuda&cpu...')
+    device = torch.device('cpu')
+    n_gpu = 0
+    gpu_ids = None
+    if torch.cuda.is_available():
+        n_gpu = torch.cuda.device_count()
+        gpu_ids = list(range(0, n_gpu))
+        if n_gpu > 1:
+            model = torch.nn.DataParallel(
+                model, device_ids=gpu_ids, output_device=gpu_ids[-1]
+            )
+            print('-> GPU training available! Training will use GPU(s) {}\n'.format(gpu_ids))
+        device = torch.device('cuda')
+    print('device: ', device)
+    model = model.to(device)
+    model.load_state_dict(torch.load('auto-encoder_new-struct.pth'))
     
     trainX = np.load('trainX_new.npy')
 

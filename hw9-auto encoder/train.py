@@ -8,7 +8,11 @@ from data import preprocess, ImgDataSet
 from model import AE
 
 
-def train_loop(autoencoder, device, epochs, dataloader):
+def train_loop(autoencoder, dataloader, args):
+    epochs = args['epochs']
+    device = args['device']
+    n_gpu = args['n_gpu']
+    gpu_ids = args['gpu_ids']
     criterion = nn.MSELoss()
     learning_rate = 1e-5
     decay = 1e-5
@@ -17,11 +21,14 @@ def train_loop(autoencoder, device, epochs, dataloader):
                            weight_decay=decay)
 
     autoencoder.train()
-    mse_loss = 0
     losses = []
     for epoch in range(epochs):
+        mse_loss = 0
         for batch in dataloader:
-            batch = batch.to(device)
+            if n_gpu > 1:
+                batch = batch.to(gpu_ids[-1])
+            else:
+                batch = batch.to(device)
             hidden, out = autoencoder(batch)
             loss = criterion(out, batch)
 
@@ -29,11 +36,12 @@ def train_loop(autoencoder, device, epochs, dataloader):
             loss.backward()
             opt.step()
 
+            if n_gpu > 1:
+                loss = loss.mean()
             mse_loss += loss.detach().item()
 
         if (epoch + 1) % 10 == 0:
             losses.append(mse_loss)
-            mse_loss = 0
         print("epoch %d, mse loss: %.2f" % (epoch, mse_loss))
 
     return losses
@@ -52,10 +60,10 @@ def eval(autoencoder, device, samples, dataset):
             input = next(iter(dataloader))
             input = input.to(device)
             hidden, output = autoencoder(input)
-            input = input[0]
+            input = (input[0].detach().cpu().numpy() + 1.) / 2.
             input = np.transpose(input, (1, 2, 0))
             inputs.append(input)
-            output = output[0]
+            output = (output[0].detach().cpu().numpy() + 1.) / 2.
             output = np.transpose(output, (1, 2, 0))
             outputs.append(output)
 
@@ -63,9 +71,7 @@ def eval(autoencoder, device, samples, dataset):
 
 
 if __name__ == '__main__':
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     same_seeds(0)
-    print('device:', device)
     data = preprocess(np.load('./trainX_new.npy'))
     dataset = ImgDataSet(data)
     dataloader = DataLoader(dataset,
@@ -74,14 +80,32 @@ if __name__ == '__main__':
 
     print("training.")
     print("-" * 50)
-    epochs = 500
-    autoencoder = AE().to(device)
+    epochs = 100
+    model = AE()
 
-    losses = train_loop(autoencoder, device, epochs, dataloader)
+    print('Setting cuda&cpu...')
+    device = torch.device('cpu')
+    n_gpu = 0
+    gpu_ids = None
+    if torch.cuda.is_available():
+        n_gpu = torch.cuda.device_count()
+        gpu_ids = list(range(0, n_gpu))
+        if n_gpu > 1:
+            model = torch.nn.DataParallel(
+                model, device_ids=gpu_ids, output_device=gpu_ids[-1]
+            )
+            print('-> GPU training available! Training will use GPU(s) {}\n'.format(gpu_ids))
+        device = torch.device('cuda')
+    print('device: ', device)
+
+    model = model.to(device)
+    args = {'epochs': 100, 'device': device, 'n_gpu': n_gpu, 'gpu_ids': gpu_ids, 'samples': 5}
+
+    losses = train_loop(model, dataloader, args)
 
     print("-" * 50)
     print('saving model to auto-encoder.pth')
-    torch.save(autoencoder.state_dict(), f'./auto-encoder.pth')
+    torch.save(model.state_dict(), f'./auto-encoder_new-struct.pth')
     print('done.')
 
     plt.plot(losses)
