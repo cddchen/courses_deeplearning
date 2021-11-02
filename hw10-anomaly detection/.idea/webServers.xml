@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="874338a2-f4df-40fa-8e32-5a8fb806ce60" name="3 cards">
+        <fileTransfer rootFolder="/media/yz/data_drive0/21_chendong" accessType="SFTP" sshConfigId="f67c9515-252d-4c31-8285-6da9984db0e5" sshConfig="yz@192.10.84.95:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
