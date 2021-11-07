@@ -1,5 +1,6 @@
+import argparse
 import os.path
-
+import string
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
@@ -13,18 +14,20 @@ from utils import set_device, same_seeds
 
 
 if __name__ == '__main__':
-    batch_size = 256
-    z_dim = 100
-    lr = 1e-4
-    n_epoch = 70
-    save_dir = 'logs'
-    os.makedirs(save_dir, exist_ok=True)
-    checkpoint_save_dir = 'checkpoints'
-    os.makedirs(checkpoint_save_dir, exist_ok=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--n_epochs", type=int, default=100, help="number of epochs of training")
+    parser.add_argument("--batch_size", type=int, default=256, help="size of the batches")
+    parser.add_argument("--learning_rate", type=float, default=1e-4, help="adam: learning rate")
+    parser.add_argument("--log_save_dir", type=str, default='logs', help="log files save")
+    parser.add_argument("--checkpoint_save_dir", type=str, default='checkpoints', help="log files save")
+    opt = parser.parse_args()
+    print(opt)
+    os.makedirs(opt.log_save_dir, exist_ok=True)
+    os.makedirs(opt.checkpoint_save_dir, exist_ok=True)
 
     print('-' * 30)
     print('Loading model...')
-    G = Generator(in_dim=z_dim)
+    G = Generator(in_dim=opt.latent_dim)
     D = Discriminator(3)
     print('Setting cuda&cpu...')
     device = torch.device('cpu')
@@ -52,26 +55,26 @@ if __name__ == '__main__':
 
     criterion = nn.BCELoss()
 
-    opt_D = optim.Adam(D.parameters(), lr=lr, betas=(0.5, 0.999))
-    opt_G = optim.Adam(G.parameters(), lr=lr, betas=(0.5, 0.999))
+    opt_D = optim.Adam(D.parameters(), lr=opt.learning_rate, betas=(0.5, 0.999))
+    opt_G = optim.Adam(G.parameters(), lr=opt.learning_rate, betas=(0.5, 0.999))
 
     same_seeds(0)
 
     dataset = get_dataset('./faces')
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4)
+    dataloader = DataLoader(dataset, batch_size=opt.batch_size, shuffle=True, num_workers=4)
 
-    z_sample = Variable(torch.randn(100, z_dim)).to(device)
+    z_sample = Variable(torch.randn(100, opt.latent_dim)).to(device)
 
     print('-' * 30)
     print('Start to train model.')
-    for e, epoch in enumerate(range(n_epoch)):
+    for e, epoch in enumerate(range(opt.n_epochs)):
         for i, data in enumerate(dataloader):
             imgs = data
             imgs = imgs.to(device)
             bs = imgs.size(0)
 
             # Training D
-            z = Variable(torch.randn(bs, z_dim)).to(device)
+            z = Variable(torch.randn(bs, opt.latent_dim)).to(device)
             r_imgs = Variable(imgs).to(device)
             f_imgs = G(z).to(device)
 
@@ -95,7 +98,7 @@ if __name__ == '__main__':
 
             # Training G
             # leaf
-            z = Variable(torch.randn(bs, z_dim)).to(device)
+            z = Variable(torch.randn(bs, opt.latent_dim)).to(device)
             f_imgs = G(z)
 
             # dis
@@ -110,10 +113,10 @@ if __name__ == '__main__':
             opt_G.step()
 
             # log
-            print(f'\rEpoch [{epoch+1}/{n_epoch}] {i+1}/{len(dataloader)} Loss_D: {loss_D.item():.4f} Loss_G: {loss_G.item():.4f}', end='')
+            print(f'\rEpoch [{epoch+1}/{opt.n_epochs}] {i+1}/{len(dataloader)} Loss_D: {loss_D.item():.4f} Loss_G: {loss_G.item():.4f}', end='')
         G.eval()
         f_imgs_sample = (G(z_sample).data + 1) / 2.0
-        filename = os.path.join(save_dir, f'Epoch_{epoch+1:03d}.jpg')
+        filename = os.path.join(opt.log_save_dir, f'Epoch_{epoch+1:03d}.jpg')
         torchvision.utils.save_image(f_imgs_sample, filename, nrow=10)
         print(f'| Save some samples to {filename}.')
         # show generated img
